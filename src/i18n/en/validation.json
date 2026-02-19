@@ -1,0 +1,5 @@
+{
+  "IS_EMAIL": "Invalid email",
+  "IS_NOT_EMPTY": "{{property}} is required",
+  "IS_STRING": "{{property}} must be a string"
+}

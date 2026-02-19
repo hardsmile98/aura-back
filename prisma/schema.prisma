@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Locale {
+  ru
+  en
+}
+
+enum SubscriptionStatus {
+  active
+  inactive
+}
+
+model User {
+  id           String             @id @default(cuid())
+  email        String             @unique
+  locale       Locale             @default(ru)
+  subscription SubscriptionStatus @default(inactive)
+  quizResult   Json?
+  createdAt    DateTime           @default(now())
+  loginLinks   LoginLink[]
+}
+
+model LoginLink {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+}
