@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { I18nContext, I18nService } from 'nestjs-i18n';
@@ -23,17 +19,17 @@ export class AuthService {
   ) {}
 
   async sendMagicLink(email: string): Promise<{ message: string }> {
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { email },
     });
 
-    const lang = I18nContext.current()?.lang ?? 'en';
-
     if (!user) {
-      throw new BadRequestException(
-        this.i18n.t('auth.USER_NOT_FOUND', { lang }),
-      );
+      user = await this.prisma.user.create({
+        data: { email },
+      });
     }
+
+    const lang = I18nContext.current()?.lang ?? 'en';
 
     const token = randomBytes(64).toString('hex');
 
