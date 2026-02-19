@@ -22,7 +22,7 @@ export class EmailService {
     });
   }
 
-  async sendMagicLink(email: string, link: string, lang = 'ru'): Promise<void> {
+  async sendMagicLink(email: string, link: string, lang = 'en'): Promise<void> {
     const subject = this.i18n.t('email.LOGIN_SUBJECT', { lang });
     const body = this.i18n.t('email.LOGIN_BODY', { lang });
     const expiry = this.i18n.t('email.LINK_EXPIRY', { lang });

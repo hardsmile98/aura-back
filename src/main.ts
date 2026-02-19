@@ -1,11 +1,39 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
+import type { ValidationError } from 'class-validator';
+
+function getAllErrorMessages(errors: ValidationError[]): string[] {
+  const messages: string[] = [];
+
+  for (const error of errors) {
+    if (error.constraints) {
+      messages.push(...Object.values(error.constraints));
+    }
+    if (error.children?.length) {
+      messages.push(...getAllErrorMessages(error.children));
+    }
+  }
+  return messages;
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.useGlobalFilters(new I18nValidationExceptionFilter());
+  app.useGlobalFilters(
+    new I18nValidationExceptionFilter({
+      errorFormatter: (errors) => ({ messages: getAllErrorMessages(errors) }),
+
+      responseBodyFormatter: (_host, exc, formattedErrors) => {
+        const { messages } = formattedErrors as { messages: string[] };
+
+        return {
+          statusCode: exc.getStatus(),
+          message: messages.length === 1 ? messages[0] : messages,
+        };
+      },
+    }),
+  );
 
   app.useGlobalPipes(
     new I18nValidationPipe({

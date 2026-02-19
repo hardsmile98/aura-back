@@ -14,7 +14,7 @@ import { AuthModule } from './auth/auth.module.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     I18nModule.forRoot({
-      fallbackLanguage: 'ru',
+      fallbackLanguage: 'en',
       loaderOptions: {
         path: join(__dirname, '..', 'i18n'),
         watch: true,
