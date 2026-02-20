@@ -6,7 +6,7 @@ CREATE TYPE "SubscriptionStatus" AS ENUM ('active', 'inactive');
 
 -- CreateTable
 CREATE TABLE "User" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "email" TEXT NOT NULL,
     "locale" "Locale" NOT NULL DEFAULT 'ru',
     "subscription" "SubscriptionStatus" NOT NULL DEFAULT 'inactive',
@@ -18,12 +18,12 @@ CREATE TABLE "User" (
 
 -- CreateTable
 CREATE TABLE "LoginLink" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "token" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
     "usedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "userId" TEXT NOT NULL,
+    "userId" INTEGER NOT NULL,
 
     CONSTRAINT "LoginLink_pkey" PRIMARY KEY ("id")
 );
