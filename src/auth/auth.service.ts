@@ -6,8 +6,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { I18nContext, I18nService } from 'nestjs-i18n';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { EmailService } from '../email/email.service.js';
+import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { randomBytes } from 'node:crypto';
 
 const TOKEN_EXPIRY_MINUTES = 15;

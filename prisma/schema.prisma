@@ -16,6 +16,12 @@ enum SubscriptionStatus {
   inactive
 }
 
+enum HoroscopePeriod {
+  day
+  week
+  month
+}
+
 model User {
   id           Int                @id @default(autoincrement())
   email        String             @unique
@@ -24,6 +30,18 @@ model User {
   quizResult   Json?
   createdAt    DateTime           @default(now())
   loginLinks   LoginLink[]
+  horoscopes   Horoscope[]
+}
+
+model Horoscope {
+  id        Int           @id @default(autoincrement())
+  userId    Int
+  period    HoroscopePeriod
+  content   Json
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, period])
 }
 
 model LoginLink {

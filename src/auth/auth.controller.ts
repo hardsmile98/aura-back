@@ -1,8 +1,8 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
-import { CreateLeadDto } from './dto/create-lead.dto.js';
-import { SendMagicLinkDto } from './dto/send-magic-link.dto.js';
-import { VerifyMagicLinkDto } from './dto/verify-magic-link.dto.js';
+import { CreateLeadDto } from './dto/create-lead.dto';
+import { SendMagicLinkDto } from './dto/send-magic-link.dto';
+import { VerifyMagicLinkDto } from './dto/verify-magic-link.dto';
 
 @Controller('auth')
 export class AuthController {
