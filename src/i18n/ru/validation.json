@@ -1,5 +1,7 @@
 {
   "IS_EMAIL": "Некорректный email",
   "IS_NOT_EMPTY": "{property} обязателен",
-  "IS_STRING": "{property} должен быть строкой"
+  "IS_STRING": "{property} должен быть строкой",
+  "IS_OBJECT": "{property} должен быть объектом",
+  "IS_IN": "{property} должен быть одним из: {values}"
 }

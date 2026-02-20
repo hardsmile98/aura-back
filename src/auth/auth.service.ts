@@ -56,6 +56,27 @@ export class AuthService {
     };
   }
 
+  async createLead(
+    email: string,
+    quizResult?: Record<string, unknown>,
+    locale?: 'ru' | 'en',
+  ): Promise<{ id: number; email: string }> {
+    const user = await this.prisma.user.upsert({
+      where: { email },
+      create: {
+        email,
+        ...(locale && { locale }),
+        ...(quizResult && { quizResult: quizResult as object }),
+      },
+      update: {
+        ...(locale && { locale }),
+        ...(quizResult && { quizResult: quizResult as object }),
+      },
+    });
+
+    return { id: user.id, email: user.email };
+  }
+
   async verifyMagicLink(token: string) {
     const loginLink = await this.prisma.loginLink.findUnique({
       where: { token },
