@@ -59,6 +59,10 @@ function toHoroscopeCategories(
 export class HoroscopeService {
   private readonly client: OpenAI | null = null;
   private readonly prisma: PrismaClient;
+  private readonly pendingGenerations = new Map<
+    string,
+    Promise<HoroscopeByLocale>
+  >();
 
   constructor(
     config: ConfigService,
@@ -96,6 +100,40 @@ export class HoroscopeService {
       return { horoscope: byLocale[lang] };
     }
 
+    const horoscope = await this.getOrCreateGeneration(
+      userId,
+      quizResult,
+      period,
+    );
+
+    const lang = this.resolveLocale(locale);
+    return { horoscope: horoscope[lang] };
+  }
+
+  private getOrCreateGeneration(
+    userId: number,
+    quizResult: Record<string, unknown>,
+    period: HoroscopePeriod,
+  ): Promise<HoroscopeByLocale> {
+    const key = `${userId}:${period}`;
+    let pending = this.pendingGenerations.get(key);
+
+    if (!pending) {
+      pending = this.generateAndSave(userId, quizResult, period);
+
+      this.pendingGenerations.set(key, pending);
+
+      void pending.finally(() => this.pendingGenerations.delete(key));
+    }
+
+    return pending;
+  }
+
+  private async generateAndSave(
+    userId: number,
+    quizResult: Record<string, unknown>,
+    period: HoroscopePeriod,
+  ): Promise<HoroscopeByLocale> {
     const horoscope = await this.fetchFromDeepSeek(quizResult, period);
 
     await this.prisma.horoscope.create({
@@ -106,8 +144,7 @@ export class HoroscopeService {
       },
     });
 
-    const lang = this.resolveLocale(locale);
-    return { horoscope: horoscope[lang] };
+    return horoscope;
   }
 
   private resolveLocale(locale: string): 'ru' | 'en' {
