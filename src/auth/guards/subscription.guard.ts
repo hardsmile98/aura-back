@@ -13,9 +13,12 @@ export class SubscriptionGuard implements CanActivate {
 
   canActivate(ctx: ExecutionContext): boolean {
     const request = ctx.switchToHttp().getRequest<{ user?: User }>();
+
     const user = request.user;
 
-    if (!user || user.subscription !== 'active') {
+    const hasAccess = user?.subscription === 'active';
+
+    if (!user || !hasAccess) {
       const lang = I18nContext.current()?.lang ?? 'en';
       throw new ForbiddenException(
         this.i18n.t('subscription.REQUIRED', { lang }),

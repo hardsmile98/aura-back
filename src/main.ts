@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 import type { ValidationError } from 'class-validator';
@@ -18,7 +19,9 @@ function getAllErrorMessages(errors: ValidationError[]): string[] {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
   app.useGlobalFilters(
     new I18nValidationExceptionFilter({

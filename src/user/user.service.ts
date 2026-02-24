@@ -18,6 +18,12 @@ export class UserService {
     return user;
   }
 
+  async findByStripeCustomerId(stripeCustomerId: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: { stripeCustomerId },
+    });
+  }
+
   async saveStripeCustomerId(
     userId: number,
     stripeCustomerId: string,
@@ -44,7 +50,37 @@ export class UserService {
   ): Promise<void> {
     await this.prisma.user.update({
       where: { id: userId },
-      data: { subscription: status },
+      data: {
+        subscription: status,
+        ...(status === 'inactive' && { subscriptionEndsAt: null }),
+      },
+    });
+  }
+
+  async updateSubscriptionData(
+    userId: number,
+    status: SubscriptionStatus,
+    cancelAtPeriodEnd: boolean,
+    currentPeriodEnd?: number,
+  ): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        subscription: status,
+        subscriptionEndsAt: cancelAtPeriodEnd
+          ? new Date(Number(currentPeriodEnd) * 1000)
+          : null,
+      },
+    });
+  }
+
+  async saveSubscriptionEndsAt(
+    userId: number,
+    subscriptionEndsAt: Date,
+  ): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { subscriptionEndsAt },
     });
   }
 }

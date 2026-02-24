@@ -1,12 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { User } from '@prisma/client';
+import type { SubscriptionStatus, User } from '@prisma/client';
 import { I18nContext, I18nService } from 'nestjs-i18n';
+import Stripe from 'stripe';
 import { StripeService } from './stripe.service.js';
 import { UserService } from '../user/user.service.js';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     private stripeService: StripeService,
     private userService: UserService,
@@ -107,6 +110,176 @@ export class PaymentsService {
       ],
     });
 
+    await this.userService.updateSubscriptionStatus(userId, 'active');
+
     return { success: true };
+  }
+
+  async cancelSubscription(userId: number): Promise<{ success: true }> {
+    const fullUser = await this.userService.findById(userId);
+
+    if (!fullUser.stripeCustomerId) {
+      const lang = I18nContext.current()?.lang ?? 'en';
+
+      throw new BadRequestException(
+        this.i18n.t('payments.NO_SUBSCRIPTION', { lang }),
+      );
+    }
+
+    const [activeSubs, trialingSubs] = await Promise.all([
+      this.stripeService.stripe.subscriptions.list({
+        customer: fullUser.stripeCustomerId,
+        status: 'active',
+      }),
+      this.stripeService.stripe.subscriptions.list({
+        customer: fullUser.stripeCustomerId,
+        status: 'trialing',
+      }),
+    ]);
+
+    const activeSubscription = activeSubs.data[0] ?? trialingSubs.data[0];
+
+    if (!activeSubscription) {
+      const lang = I18nContext.current()?.lang ?? 'en';
+
+      throw new BadRequestException(
+        this.i18n.t('payments.NO_SUBSCRIPTION', { lang }),
+      );
+    }
+
+    if (activeSubscription.cancel_at_period_end) {
+      const lang = I18nContext.current()?.lang ?? 'en';
+
+      throw new BadRequestException(
+        this.i18n.t('payments.ALREADY_CANCELLING', { lang }),
+      );
+    }
+
+    const scheduleId =
+      typeof activeSubscription.schedule === 'string'
+        ? activeSubscription.schedule
+        : activeSubscription.schedule?.id;
+
+    if (scheduleId) {
+      await this.stripeService.stripe.subscriptionSchedules.release(scheduleId);
+    }
+
+    await this.stripeService.stripe.subscriptions.update(
+      activeSubscription.id,
+      { cancel_at_period_end: true },
+    );
+
+    const firstItem = activeSubscription.items.data[0];
+    const periodEnd = new Date(
+      Number(firstItem?.current_period_end ?? 0) * 1000,
+    );
+
+    await this.userService.saveSubscriptionEndsAt(userId, periodEnd);
+
+    return { success: true };
+  }
+
+  async handleStripeWebhook(rawBody: string, signature: string): Promise<void> {
+    const webhookSecret = this.config.get<string>('STRIPE_WEBHOOK_SECRET');
+
+    if (!webhookSecret) {
+      this.logger.warn('STRIPE_WEBHOOK_SECRET not set, skipping verification');
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      event = webhookSecret
+        ? this.stripeService.stripe.webhooks.constructEvent(
+            rawBody,
+            signature,
+            webhookSecret,
+          )
+        : (JSON.parse(rawBody) as Stripe.Event);
+    } catch (err) {
+      this.logger.error('Webhook signature verification failed', err);
+
+      throw new BadRequestException('Invalid webhook signature');
+    }
+
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object;
+        const subscriptionItem = subscription.items.data[0];
+
+        const currentPeriodEnd = subscriptionItem?.current_period_end;
+
+        await this.syncSubscriptionStatus(
+          subscription.customer as string,
+          subscription.status,
+          subscription.cancel_at_period_end ?? false,
+          currentPeriodEnd,
+        );
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object;
+
+        await this.syncSubscriptionStatus(
+          subscription.customer as string,
+          'canceled',
+          false,
+          undefined,
+        );
+        break;
+      }
+
+      default:
+        this.logger.debug(`Unhandled webhook event: ${event.type}`);
+    }
+  }
+
+  private async syncSubscriptionStatus(
+    stripeCustomerId: string,
+    stripeStatus: string,
+    cancelAtPeriodEnd: boolean,
+    currentPeriodEnd?: number,
+  ): Promise<void> {
+    const user =
+      await this.userService.findByStripeCustomerId(stripeCustomerId);
+
+    if (!user) {
+      this.logger.warn(
+        `User not found for Stripe customer: ${stripeCustomerId}`,
+      );
+      return;
+    }
+
+    const status = this.mapStripeStatusToSubscription(stripeStatus);
+
+    await this.userService.updateSubscriptionData(
+      user.id,
+      status,
+      cancelAtPeriodEnd,
+      currentPeriodEnd,
+    );
+
+    this.logger.log(
+      `Synced subscription for user ${user.id}: ${stripeStatus} -> ${status}`,
+    );
+  }
+
+  private mapStripeStatusToSubscription(
+    stripeStatus: string,
+  ): SubscriptionStatus {
+    switch (stripeStatus) {
+      case 'active':
+      case 'trialing':
+        return 'active';
+      case 'past_due':
+      case 'canceled':
+      case 'unpaid':
+      case 'incomplete':
+      case 'incomplete_expired':
+      default:
+        return 'inactive';
+    }
   }
 }

@@ -13,6 +13,7 @@ CREATE TABLE "User" (
     "email" TEXT NOT NULL,
     "locale" "Locale" NOT NULL DEFAULT 'ru',
     "subscription" "SubscriptionStatus" NOT NULL DEFAULT 'none',
+    "subscriptionEndsAt" TIMESTAMP(3),
     "stripeCustomerId" TEXT,
     "stripePaymentMethodId" TEXT,
     "quizResult" JSONB,
