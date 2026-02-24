@@ -35,6 +35,7 @@ model User {
   createdAt             DateTime           @default(now())
   loginLinks            LoginLink[]
   horoscopes            Horoscope[]
+  sketches Sketch[]
 }
 
 model Horoscope {
@@ -46,6 +47,22 @@ model Horoscope {
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, period])
+}
+
+enum SketchType {
+  soulmate
+  baby
+}
+
+model Sketch {
+  id        Int             @id @default(autoincrement())
+  userId    Int
+  type      SketchType
+  content   Json
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
 }
 
 model LoginLink {
