@@ -89,26 +89,37 @@ export class PaymentsService {
 
     await this.userService.saveStripePaymentMethodId(userId, paymentMethodId);
 
-    const priceTrial = this.config.getOrThrow<string>('STRIPE_PRICE_TRIAL_ID');
-
     const priceMonthly = this.config.getOrThrow<string>(
       'STRIPE_PRICE_MONTHLY_ID',
     );
 
-    await this.stripeService.stripe.subscriptionSchedules.create({
-      customer: fullUser.stripeCustomerId,
-      start_date: 'now',
-      end_behavior: 'release',
-      phases: [
-        {
-          items: [{ price: priceTrial, quantity: 1 }],
-          duration: { interval: 'day', interval_count: 3 },
-        },
-        {
-          items: [{ price: priceMonthly, quantity: 1 }],
-        },
-      ],
-    });
+    const isResubscribe = fullUser.subscription === 'inactive';
+
+    if (isResubscribe) {
+      await this.stripeService.stripe.subscriptions.create({
+        customer: fullUser.stripeCustomerId,
+        items: [{ price: priceMonthly, quantity: 1 }],
+      });
+    } else {
+      const priceTrial = this.config.getOrThrow<string>(
+        'STRIPE_PRICE_TRIAL_ID',
+      );
+
+      await this.stripeService.stripe.subscriptionSchedules.create({
+        customer: fullUser.stripeCustomerId,
+        start_date: 'now',
+        end_behavior: 'release',
+        phases: [
+          {
+            items: [{ price: priceTrial, quantity: 1 }],
+            duration: { interval: 'day', interval_count: 3 },
+          },
+          {
+            items: [{ price: priceMonthly, quantity: 1 }],
+          },
+        ],
+      });
+    }
 
     await this.userService.updateSubscriptionStatus(userId, 'active');
 
@@ -131,6 +142,7 @@ export class PaymentsService {
         customer: fullUser.stripeCustomerId,
         status: 'active',
       }),
+
       this.stripeService.stripe.subscriptions.list({
         customer: fullUser.stripeCustomerId,
         status: 'trialing',
@@ -169,9 +181,10 @@ export class PaymentsService {
       { cancel_at_period_end: true },
     );
 
-    const firstItem = activeSubscription.items.data[0];
+    const subscriptionItem = activeSubscription.items.data[0];
+
     const periodEnd = new Date(
-      Number(firstItem?.current_period_end ?? 0) * 1000,
+      Number(subscriptionItem?.current_period_end ?? 0) * 1000,
     );
 
     await this.userService.saveSubscriptionEndsAt(userId, periodEnd);

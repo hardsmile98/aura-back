@@ -66,6 +66,7 @@ export class UserService {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
+        ...(status === 'active' && { subscriptionEndsAt: null }),
         subscription: status,
         subscriptionEndsAt: cancelAtPeriodEnd
           ? new Date(Number(currentPeriodEnd) * 1000)
