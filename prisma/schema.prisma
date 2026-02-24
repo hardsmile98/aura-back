@@ -12,6 +12,7 @@ enum Locale {
 }
 
 enum SubscriptionStatus {
+  none
   active
   inactive
 }
@@ -23,23 +24,25 @@ enum HoroscopePeriod {
 }
 
 model User {
-  id           Int                @id @default(autoincrement())
-  email        String             @unique
-  locale       Locale             @default(ru)
-  subscription SubscriptionStatus @default(inactive)
-  quizResult   Json?
-  createdAt    DateTime           @default(now())
-  loginLinks   LoginLink[]
-  horoscopes   Horoscope[]
+  id                    Int                @id @default(autoincrement())
+  email                 String             @unique
+  locale                Locale             @default(ru)
+  subscription          SubscriptionStatus @default(none)
+  stripeCustomerId      String?
+  stripePaymentMethodId String?
+  quizResult            Json?
+  createdAt             DateTime           @default(now())
+  loginLinks            LoginLink[]
+  horoscopes            Horoscope[]
 }
 
 model Horoscope {
-  id        Int           @id @default(autoincrement())
+  id        Int             @id @default(autoincrement())
   userId    Int
   period    HoroscopePeriod
   content   Json
-  createdAt DateTime      @default(now())
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, period])
 }

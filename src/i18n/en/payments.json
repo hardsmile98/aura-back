@@ -1,0 +1,5 @@
+{
+  "SETUP_INTENT_REQUIRED": "Setup intent must be completed first",
+  "NO_SUBSCRIPTION": "No active subscription found",
+  "ALREADY_SUBSCRIBED": "You already have an active subscription"
+}

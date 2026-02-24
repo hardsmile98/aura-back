@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -6,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { I18nContext, I18nService } from 'nestjs-i18n';
+import { SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { randomBytes } from 'node:crypto';
@@ -31,6 +33,12 @@ export class AuthService {
 
     if (!user) {
       throw new NotFoundException(this.i18n.t('auth.USER_NOT_FOUND', { lang }));
+    }
+
+    if (user.subscription === SubscriptionStatus.none) {
+      throw new ForbiddenException(
+        this.i18n.t('auth.SEND_LINK_PAYMENT_REQUIRED', { lang }),
+      );
     }
 
     const token = randomBytes(64).toString('hex');
@@ -60,7 +68,7 @@ export class AuthService {
     email: string,
     quizResult?: Record<string, unknown>,
     locale?: 'ru' | 'en',
-  ): Promise<{ id: number; email: string }> {
+  ): Promise<{ accessToken: string }> {
     const user = await this.prisma.user.upsert({
       where: { email },
       create: {
@@ -74,7 +82,14 @@ export class AuthService {
       },
     });
 
-    return { id: user.id, email: user.email };
+    const accessToken = this.jwt.sign(
+      { sub: user.id, email: user.email },
+      { expiresIn: this.config.get('JWT_EXPIRES_IN', '30d') },
+    );
+
+    return {
+      accessToken,
+    };
   }
 
   async verifyMagicLink(token: string) {
