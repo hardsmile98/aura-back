@@ -259,10 +259,9 @@ export class HoroscopeService {
 
   private getPeriodPrompt(period: HoroscopePeriod): string {
     const prompts: Record<HoroscopePeriod, string> = {
-      day: 'Составь персональный гороскоп на сегодня / Create a personal horoscope for today.',
-      week: 'Составь персональный гороскоп на неделю / Create a personal horoscope for the week.',
-      month:
-        'Составь персональный гороскоп на месяц / Create a personal horoscope for the month.',
+      day: 'Create a personal horoscope for today.',
+      week: 'Create a personal horoscope for the week.',
+      month: 'Create a personal horoscope for the month.',
     };
     return prompts[period];
   }
