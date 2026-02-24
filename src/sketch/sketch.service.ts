@@ -94,6 +94,9 @@ export class SketchService {
 
     if (cached) {
       const byLocale = this.parseCachedContent(cached.content);
+      if (type === 'baby') {
+        this.normalizeBabyGender(byLocale);
+      }
       const lang = this.resolveLocale(locale);
       return { sketch: byLocale[lang] };
     }
@@ -130,6 +133,10 @@ export class SketchService {
   ): Promise<SketchByLocale> {
     const sketch = await this.fetchFromDeepSeek(quizResult, type);
 
+    if (type === 'baby') {
+      this.normalizeBabyGender(sketch);
+    }
+
     await this.prisma.sketch.create({
       data: {
         user: { connect: { id: userId } },
@@ -145,6 +152,15 @@ export class SketchService {
     return SUPPORTED_LOCALES.includes(locale as 'ru' | 'en')
       ? (locale as 'ru' | 'en')
       : 'ru';
+  }
+
+  private normalizeBabyGender(sketch: SketchByLocale): void {
+    for (const lang of ['ru', 'en'] as const) {
+      const content = sketch[lang] as Record<string, unknown>;
+      const g = content?.gender;
+      content.gender =
+        typeof g === 'string' && (g === 'm' || g === 'w') ? g : 'm';
+    }
   }
 
   private parseCachedContent(content: Prisma.JsonValue): SketchByLocale {
@@ -330,6 +346,7 @@ Output: "ru" must be entirely in Russian, "en" entirely in English. Each value i
     const schema = JSON.stringify(
       {
         ru: {
+          gender: '"m" | "w"',
           intro: 'string',
           nameAndPersonality: 'string',
           whenAndHowBorn: 'string',
@@ -340,6 +357,7 @@ Output: "ru" must be entirely in Russian, "en" entirely in English. Each value i
           conclusion: 'string',
         },
         en: {
+          gender: '"m" | "w"',
           intro: 'string',
           nameAndPersonality: 'string',
           whenAndHowBorn: 'string',
@@ -359,6 +377,8 @@ Use the quiz data for personalization: the user's name, Star Sign (zodiac), chil
 
 You MUST respond ONLY with valid JSON in this exact format:
 ${schema}
+
+IMPORTANT: For "gender" use exactly "m" (for son/male) or "w" (for daughter/female). Prefer the value from quiz data if the user specified child gender; otherwise infer from context or use "m".
 
 Sections (write 4–8 sentences per section, vivid and engaging):
 

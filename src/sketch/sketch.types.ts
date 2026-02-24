@@ -39,6 +39,9 @@ export const BABY_SECTION_KEYS = [
 export type BabySectionKey = (typeof BABY_SECTION_KEYS)[number];
 export type BabySketchContent = Record<BabySectionKey, string>;
 
+/** Baby sketch gender: m = male/son, w = female/daughter */
+export type BabySketchGender = 'm' | 'w';
+
 export type SketchByLocale = {
   ru: SketchContent;
   en: SketchContent;
