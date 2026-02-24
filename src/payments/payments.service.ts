@@ -160,6 +160,11 @@ export class PaymentsService {
     }
 
     if (activeSubscription.cancel_at_period_end) {
+      await this.userService.saveSubscriptionEndsAt(
+        userId,
+        new Date(Number(activeSubscription.cancel_at) * 1000),
+      );
+
       const lang = I18nContext.current()?.lang ?? 'en';
 
       throw new BadRequestException(
