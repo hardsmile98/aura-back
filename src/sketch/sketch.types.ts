@@ -46,3 +46,7 @@ export type SketchByLocale = {
   ru: SketchContent;
   en: SketchContent;
 };
+
+export type SketchResponse =
+  | { status: 'ready'; sketch: SketchContent }
+  | { status: 'pending' };

@@ -35,7 +35,7 @@ model User {
   createdAt             DateTime           @default(now())
   loginLinks            LoginLink[]
   horoscopes            Horoscope[]
-  sketches Sketch[]
+  sketches              Sketch[]
 }
 
 model Horoscope {
@@ -43,6 +43,7 @@ model Horoscope {
   userId    Int
   period    HoroscopePeriod
   content   Json
+  status    String          @default("pending")
   createdAt DateTime        @default(now())
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -59,6 +60,7 @@ model Sketch {
   userId    Int
   type      SketchType
   content   Json
+  status    String          @default("pending")
   createdAt DateTime        @default(now())
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 

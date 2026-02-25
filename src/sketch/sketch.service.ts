@@ -9,7 +9,11 @@ import OpenAI from 'openai';
 import { Locale, type Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SketchType } from './dto/get-sketch.dto';
-import type { SketchByLocale, SketchContent } from './sketch.types';
+import type {
+  SketchByLocale,
+  SketchContent,
+  SketchResponse,
+} from './sketch.types';
 import { BABY_SECTION_KEYS, SOULMATE_SECTION_KEYS } from './sketch.types';
 
 const SUPPORTED_LOCALES = ['ru', 'en'] as const;
@@ -57,10 +61,6 @@ function toSketchContent(obj: Record<string, unknown>): SketchContent {
 export class SketchService {
   private readonly client: OpenAI | null = null;
   private readonly prisma: PrismaClient;
-  private readonly pendingGenerations = new Map<
-    string,
-    Promise<SketchByLocale>
-  >();
 
   constructor(
     config: ConfigService,
@@ -82,7 +82,7 @@ export class SketchService {
     quizResult: Record<string, unknown> | null,
     type: SketchType,
     locale: Locale,
-  ): Promise<{ sketch: SketchContent }> {
+  ): Promise<SketchResponse> {
     if (!quizResult || Object.keys(quizResult).length === 0) {
       const lang = I18nContext.current()?.lang ?? 'en';
       throw new BadRequestException(
@@ -94,58 +94,68 @@ export class SketchService {
 
     if (cached) {
       const byLocale = this.parseCachedContent(cached.content);
+
       if (type === 'baby') {
         this.normalizeBabyGender(byLocale);
       }
+
       const lang = this.resolveLocale(locale);
-      return { sketch: byLocale[lang] };
+
+      return { status: 'ready', sketch: byLocale[lang] };
     }
 
-    const sketch = await this.getOrCreateGeneration(userId, quizResult, type);
+    const pending = await this.prisma.sketch.findFirst({
+      where: { userId, type, status: 'pending' },
+      select: { id: true },
+    });
 
-    const lang = this.resolveLocale(locale);
-    return { sketch: sketch[lang] };
-  }
-
-  private getOrCreateGeneration(
-    userId: number,
-    quizResult: Record<string, unknown>,
-    type: SketchType,
-  ): Promise<SketchByLocale> {
-    const key = `${userId}:${type}`;
-    let pending = this.pendingGenerations.get(key);
-
-    if (!pending) {
-      pending = this.generateAndSave(userId, quizResult, type);
-
-      this.pendingGenerations.set(key, pending);
-
-      void pending.finally(() => this.pendingGenerations.delete(key));
+    if (pending) {
+      return { status: 'pending' };
     }
 
-    return pending;
-  }
-
-  private async generateAndSave(
-    userId: number,
-    quizResult: Record<string, unknown>,
-    type: SketchType,
-  ): Promise<SketchByLocale> {
-    const sketch = await this.fetchFromDeepSeek(quizResult, type);
-
-    if (type === 'baby') {
-      this.normalizeBabyGender(sketch);
-    }
-
-    await this.prisma.sketch.create({
+    const created = await this.prisma.sketch.create({
       data: {
         user: { connect: { id: userId } },
         type,
-        content: sketch as unknown as Prisma.JsonObject,
+        content: {},
+        status: 'pending',
       },
     });
 
-    return sketch;
+    void this.generateAndSave(quizResult, type, created.id);
+
+    return { status: 'pending' };
+  }
+
+  private async generateAndSave(
+    quizResult: Record<string, unknown>,
+    type: SketchType,
+    id: number,
+  ): Promise<SketchByLocale | null> {
+    try {
+      const sketch = await this.fetchFromDeepSeek(quizResult, type);
+
+      if (type === 'baby') {
+        this.normalizeBabyGender(sketch);
+      }
+
+      await this.prisma.sketch.update({
+        where: { id },
+        data: {
+          content: sketch as unknown as Prisma.JsonObject,
+          status: 'completed',
+        },
+      });
+
+      return sketch;
+    } catch {
+      await this.prisma.sketch.update({
+        where: { id },
+        data: { status: 'failed' },
+      });
+
+      return null;
+    }
   }
 
   private resolveLocale(locale: string): 'ru' | 'en' {
@@ -165,7 +175,6 @@ export class SketchService {
 
   private parseCachedContent(content: Prisma.JsonValue): SketchByLocale {
     const str = typeof content === 'string' ? content : JSON.stringify(content);
-
     return this.parseSketchByLocaleJson(str);
   }
 
@@ -177,6 +186,7 @@ export class SketchService {
       where: {
         userId,
         type,
+        status: 'completed',
       },
       orderBy: { createdAt: 'desc' },
       select: { content: true },

@@ -9,7 +9,11 @@ import OpenAI from 'openai';
 import { Locale, type Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { HoroscopePeriod } from './dto/get-horoscope.dto';
-import type { HoroscopeByLocale, HoroscopeCategories } from './horoscope.types';
+import type {
+  HoroscopeByLocale,
+  HoroscopeCategories,
+  HoroscopeResponse,
+} from './horoscope.types';
 
 const SUPPORTED_LOCALES = ['ru', 'en'] as const;
 
@@ -27,14 +31,6 @@ const PERIOD_TTL_MS: Record<HoroscopePeriod, number> = {
   week: 7 * 24 * 60 * 60 * 1000,
   month: 30 * 24 * 60 * 60 * 1000,
 };
-
-function isHoroscopeCategories(value: unknown): value is HoroscopeCategories {
-  if (typeof value !== 'object' || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  return CATEGORIES.every(
-    (key) => key in obj && (typeof obj[key] === 'string' || obj[key] == null),
-  );
-}
 
 function toHoroscopeCategories(
   obj: Record<string, unknown>,
@@ -59,10 +55,6 @@ function toHoroscopeCategories(
 export class HoroscopeService {
   private readonly client: OpenAI | null = null;
   private readonly prisma: PrismaClient;
-  private readonly pendingGenerations = new Map<
-    string,
-    Promise<HoroscopeByLocale>
-  >();
 
   constructor(
     config: ConfigService,
@@ -70,7 +62,9 @@ export class HoroscopeService {
     prisma: PrismaService,
   ) {
     this.prisma = prisma;
+
     const apiKey = config.get<string>('DEEPSEEK_API_KEY');
+
     if (apiKey) {
       this.client = new OpenAI({
         baseURL: 'https://api.deepseek.com',
@@ -84,7 +78,7 @@ export class HoroscopeService {
     quizResult: Record<string, unknown> | null,
     period: HoroscopePeriod,
     locale: Locale,
-  ): Promise<{ horoscope: HoroscopeCategories }> {
+  ): Promise<HoroscopeResponse> {
     if (!quizResult || Object.keys(quizResult).length === 0) {
       const lang = I18nContext.current()?.lang ?? 'en';
       throw new BadRequestException(
@@ -96,55 +90,60 @@ export class HoroscopeService {
 
     if (cached) {
       const byLocale = this.parseCachedContent(cached.content);
+
       const lang = this.resolveLocale(locale);
-      return { horoscope: byLocale[lang] };
+
+      return { status: 'ready', horoscope: byLocale[lang] };
     }
 
-    const horoscope = await this.getOrCreateGeneration(
-      userId,
-      quizResult,
-      period,
-    );
+    const pending = await this.prisma.horoscope.findFirst({
+      where: { userId, period, status: 'pending' },
+      select: { id: true },
+    });
 
-    const lang = this.resolveLocale(locale);
-    return { horoscope: horoscope[lang] };
-  }
-
-  private getOrCreateGeneration(
-    userId: number,
-    quizResult: Record<string, unknown>,
-    period: HoroscopePeriod,
-  ): Promise<HoroscopeByLocale> {
-    const key = `${userId}:${period}`;
-    let pending = this.pendingGenerations.get(key);
-
-    if (!pending) {
-      pending = this.generateAndSave(userId, quizResult, period);
-
-      this.pendingGenerations.set(key, pending);
-
-      void pending.finally(() => this.pendingGenerations.delete(key));
+    if (pending) {
+      return { status: 'pending' };
     }
 
-    return pending;
-  }
-
-  private async generateAndSave(
-    userId: number,
-    quizResult: Record<string, unknown>,
-    period: HoroscopePeriod,
-  ): Promise<HoroscopeByLocale> {
-    const horoscope = await this.fetchFromDeepSeek(quizResult, period);
-
-    await this.prisma.horoscope.create({
+    const created = await this.prisma.horoscope.create({
       data: {
         user: { connect: { id: userId } },
         period,
-        content: horoscope satisfies Prisma.JsonObject,
+        content: {},
+        status: 'pending',
       },
     });
 
-    return horoscope;
+    void this.generateAndSave(quizResult, period, created.id);
+
+    return { status: 'pending' };
+  }
+
+  private async generateAndSave(
+    quizResult: Record<string, unknown>,
+    period: HoroscopePeriod,
+    id: number,
+  ): Promise<HoroscopeByLocale | null> {
+    try {
+      const horoscope = await this.fetchFromDeepSeek(quizResult, period);
+
+      await this.prisma.horoscope.update({
+        where: { id },
+        data: {
+          content: horoscope satisfies Prisma.JsonObject,
+          status: 'completed' as const,
+        },
+      });
+
+      return horoscope;
+    } catch {
+      await this.prisma.horoscope.update({
+        where: { id },
+        data: { status: 'failed' as const },
+      });
+
+      return null;
+    }
   }
 
   private resolveLocale(locale: string): 'ru' | 'en' {
@@ -163,12 +162,14 @@ export class HoroscopeService {
     period: HoroscopePeriod,
   ): Promise<{ content: Prisma.JsonValue } | null> {
     const ttl = PERIOD_TTL_MS[period];
+
     const validSince = new Date(Date.now() - ttl);
 
     return this.prisma.horoscope.findFirst({
       where: {
         userId,
         period,
+        status: 'completed',
         createdAt: { gte: validSince },
       },
       orderBy: { createdAt: 'desc' },
@@ -237,24 +238,6 @@ export class HoroscopeService {
       ru: toHoroscopeCategories(ru as Record<string, unknown>),
       en: toHoroscopeCategories(en as Record<string, unknown>),
     };
-  }
-
-  private parseHoroscopeJson(content: string): HoroscopeCategories {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      throw new ServiceUnavailableException('Invalid JSON from DeepSeek');
-    }
-
-    if (!isHoroscopeCategories(parsed)) {
-      if (typeof parsed === 'object' && parsed !== null) {
-        return toHoroscopeCategories(parsed as Record<string, unknown>);
-      }
-      throw new ServiceUnavailableException('Invalid horoscope format');
-    }
-
-    return parsed;
   }
 
   private getPeriodPrompt(period: HoroscopePeriod): string {
