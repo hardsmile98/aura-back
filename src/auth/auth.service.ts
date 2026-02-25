@@ -12,17 +12,39 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { randomBytes } from 'node:crypto';
 
-const TOKEN_EXPIRY_MINUTES = 1440;
-
 @Injectable()
 export class AuthService {
+  private tokenExpiryMinutes: number;
+
   constructor(
     private prisma: PrismaService,
     private email: EmailService,
     private jwt: JwtService,
     private config: ConfigService,
     private i18n: I18nService,
-  ) {}
+  ) {
+    this.tokenExpiryMinutes = Number(
+      this.config.get<string>('TOKEN_EXPIRY_MINUTES'),
+    );
+  }
+
+  async createAuthLink(userId: number, lang: string): Promise<string> {
+    const token = randomBytes(64).toString('hex');
+
+    const expiresAt = new Date(
+      Date.now() + this.tokenExpiryMinutes * 60 * 1000,
+    );
+
+    await this.prisma.loginLink.create({
+      data: { token, expiresAt, userId },
+    });
+
+    const frontendUrl = this.config.get<string>('FRONTEND_URL');
+
+    const link = `${frontendUrl}/${lang}/auth/verify?token=${token}`;
+
+    return link;
+  }
 
   async sendMagicLink(email: string): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({
@@ -41,21 +63,7 @@ export class AuthService {
       );
     }
 
-    const token = randomBytes(64).toString('hex');
-
-    const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
-
-    await this.prisma.loginLink.create({
-      data: {
-        token,
-        expiresAt,
-        userId: user.id,
-      },
-    });
-
-    const frontendUrl = this.config.get<string>('FRONTEND_URL');
-
-    const link = `${frontendUrl}/${lang}/auth/verify?token=${token}`;
+    const link = await this.createAuthLink(user.id, lang);
 
     await this.email.sendMagicLink(email, link, lang);
 

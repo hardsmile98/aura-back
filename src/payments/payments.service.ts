@@ -5,6 +5,7 @@ import { I18nContext, I18nService } from 'nestjs-i18n';
 import Stripe from 'stripe';
 import { StripeService } from './stripe.service.js';
 import { UserService } from '../user/user.service.js';
+import { EmailService } from '../email/email.service.js';
 
 @Injectable()
 export class PaymentsService {
@@ -15,6 +16,7 @@ export class PaymentsService {
     private userService: UserService,
     private config: ConfigService,
     private i18n: I18nService,
+    private emailService: EmailService,
   ) {}
 
   async createSetupIntent(user: User): Promise<{ clientSecret: string }> {
@@ -122,6 +124,14 @@ export class PaymentsService {
     }
 
     await this.userService.updateSubscriptionStatus(userId, 'active');
+
+    const lang = I18nContext.current()?.lang ?? 'en';
+
+    await this.emailService.sendSubscriptionActivated(
+      fullUser.id,
+      fullUser.email,
+      lang,
+    );
 
     return { success: true };
   }

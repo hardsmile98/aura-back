@@ -5,9 +5,10 @@ import { PaymentsService } from './payments.service.js';
 import { StripeService } from './stripe.service.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { UserModule } from '../user/user.module.js';
+import { EmailModule } from '../email/email.module.js';
 
 @Module({
-  imports: [AuthModule, UserModule],
+  imports: [AuthModule, UserModule, EmailModule],
   controllers: [PaymentsController, PaymentsWebhookController],
   providers: [PaymentsService, StripeService],
 })
