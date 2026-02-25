@@ -48,5 +48,5 @@ export type SketchByLocale = {
 };
 
 export type SketchResponse =
-  | { status: 'ready'; sketch: SketchContent }
+  | { status: string; sketch: SketchContent }
   | { status: 'pending' };

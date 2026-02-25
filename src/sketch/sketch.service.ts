@@ -101,7 +101,7 @@ export class SketchService {
 
       const lang = this.resolveLocale(locale);
 
-      return { status: 'ready', sketch: byLocale[lang] };
+      return { status: cached.status, sketch: byLocale[lang] };
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -183,13 +183,14 @@ export class SketchService {
 
   private parseCachedContent(content: Prisma.JsonValue): SketchByLocale {
     const str = typeof content === 'string' ? content : JSON.stringify(content);
+
     return this.parseSketchByLocaleJson(str);
   }
 
   private findCached(
     userId: number,
     type: SketchType,
-  ): Promise<{ content: Prisma.JsonValue } | null> {
+  ): Promise<{ content: Prisma.JsonValue; status: string } | null> {
     return this.prisma.sketch.findFirst({
       where: {
         userId,
@@ -197,7 +198,7 @@ export class SketchService {
         status: 'completed',
       },
       orderBy: { createdAt: 'desc' },
-      select: { content: true },
+      select: { content: true, status: true },
     });
   }
 

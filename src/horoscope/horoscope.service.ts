@@ -93,7 +93,7 @@ export class HoroscopeService {
 
       const lang = this.resolveLocale(locale);
 
-      return { status: 'ready', horoscope: byLocale[lang] };
+      return { status: cached.status, horoscope: byLocale[lang] };
     }
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -167,7 +167,7 @@ export class HoroscopeService {
   private findValidCache(
     userId: number,
     period: HoroscopePeriod,
-  ): Promise<{ content: Prisma.JsonValue } | null> {
+  ): Promise<{ content: Prisma.JsonValue; status: string } | null> {
     const ttl = PERIOD_TTL_MS[period];
 
     const validSince = new Date(Date.now() - ttl);
@@ -180,7 +180,7 @@ export class HoroscopeService {
         createdAt: { gte: validSince },
       },
       orderBy: { createdAt: 'desc' },
-      select: { content: true },
+      select: { content: true, status: true },
     });
   }
 

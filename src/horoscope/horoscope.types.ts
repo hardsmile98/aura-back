@@ -13,5 +13,5 @@ export type HoroscopeByLocale = {
 };
 
 export type HoroscopeResponse =
-  | { status: 'ready'; horoscope: HoroscopeCategories }
+  | { status: string; horoscope: HoroscopeCategories }
   | { status: 'pending' };
