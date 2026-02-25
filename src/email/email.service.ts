@@ -12,19 +12,24 @@ export class EmailService {
     private i18n: I18nService,
   ) {
     this.transporter = nodemailer.createTransport({
-      host: this.config.get('SMTP_HOST'),
-      port: +this.config.get('SMTP_PORT'),
-      secure: false,
+      host: this.config.get<string>('SMTP_HOST'),
+      port: Number(this.config.get<string>('SMTP_PORT')),
+      secure: this.config.get<string>('SMTP_SECURE') === 'true',
       auth: {
-        user: this.config.get('SMTP_USER'),
-        pass: this.config.get('SMTP_PASS'),
+        type: 'OAuth2',
+        user: this.config.get<string>('SMTP_USER'),
+        clientId: this.config.get<string>('SMTP_OAUTH_CLIENT_ID'),
+        clientSecret: this.config.get<string>('SMTP_OAUTH_CLIENT_SECRET'),
+        refreshToken: this.config.get<string>('SMTP_OAUTH_REFRESH_TOKEN'),
       },
     });
   }
 
   async sendMagicLink(email: string, link: string, lang = 'en'): Promise<void> {
     const subject = this.i18n.t('email.LOGIN_SUBJECT', { lang });
+
     const body = this.i18n.t('email.LOGIN_BODY', { lang });
+
     const expiry = this.i18n.t('email.LINK_EXPIRY', { lang });
 
     await this.transporter.sendMail({
