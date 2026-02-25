@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { randomBytes } from 'node:crypto';
 
-const TOKEN_EXPIRY_MINUTES = 15;
+const TOKEN_EXPIRY_MINUTES = 1440;
 
 @Injectable()
 export class AuthService {
@@ -104,10 +104,6 @@ export class AuthService {
 
     if (!loginLink) {
       throw new UnauthorizedException(t('auth.INVALID_LINK'));
-    }
-
-    if (loginLink.usedAt) {
-      throw new UnauthorizedException(t('auth.LINK_ALREADY_USED'));
     }
 
     if (loginLink.expiresAt < new Date()) {

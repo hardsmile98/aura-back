@@ -1,5 +1,7 @@
 {
   "LOGIN_SUBJECT": "Sign in to Aura",
-  "LOGIN_BODY": "Click the link to sign in:",
-  "LINK_EXPIRY": "Link is valid for 15 minutes."
+  "LOGIN_BODY": "Click the link to sign in and get your soulmate sketches",
+  "LOGIN_BUTTON": "Sign in",
+  "LOGIN_TITLE": "Confirm your email",
+  "LINK_EXPIRY": "Link is valid for 1 day."
 }
