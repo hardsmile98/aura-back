@@ -6,7 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import OpenAI from 'openai';
-import { Locale, type Prisma, PrismaClient } from '@prisma/client';
+import { Locale, Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SketchType } from './dto/get-sketch.dto';
 import type {
@@ -104,23 +104,31 @@ export class SketchService {
       return { status: 'ready', sketch: byLocale[lang] };
     }
 
-    const pending = await this.prisma.sketch.findFirst({
-      where: { userId, type, status: 'pending' },
-      select: { id: true },
+    const created = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT 1 FROM "User" WHERE id = ${userId} FOR UPDATE`,
+      );
+
+      const pending = await tx.sketch.findFirst({
+        where: { userId, type, status: 'pending' },
+        select: { id: true },
+      });
+
+      if (pending) return null;
+
+      return tx.sketch.create({
+        data: {
+          user: { connect: { id: userId } },
+          type,
+          content: {},
+          status: 'pending',
+        },
+      });
     });
 
-    if (pending) {
+    if (!created) {
       return { status: 'pending' };
     }
-
-    const created = await this.prisma.sketch.create({
-      data: {
-        user: { connect: { id: userId } },
-        type,
-        content: {},
-        status: 'pending',
-      },
-    });
 
     void this.generateAndSave(quizResult, type, created.id);
 

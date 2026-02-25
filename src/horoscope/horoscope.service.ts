@@ -6,7 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import OpenAI from 'openai';
-import { Locale, type Prisma, PrismaClient } from '@prisma/client';
+import { Locale, Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { HoroscopePeriod } from './dto/get-horoscope.dto';
 import type {
@@ -96,26 +96,33 @@ export class HoroscopeService {
       return { status: 'ready', horoscope: byLocale[lang] };
     }
 
-    const pending = await this.prisma.horoscope.findFirst({
-      where: { userId, period, status: 'pending' },
-      select: { id: true },
+    const created = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(
+        Prisma.sql`SELECT 1 FROM "User" WHERE id = ${userId} FOR UPDATE`,
+      );
+
+      const pending = await tx.horoscope.findFirst({
+        where: { userId, period, status: 'pending' },
+        select: { id: true },
+      });
+
+      if (pending) return null;
+
+      return tx.horoscope.create({
+        data: {
+          user: { connect: { id: userId } },
+          period,
+          content: {},
+          status: 'pending',
+        },
+      });
     });
 
-    if (pending) {
+    if (!created) {
       return { status: 'pending' };
     }
 
-    const created = await this.prisma.horoscope.create({
-      data: {
-        user: { connect: { id: userId } },
-        period,
-        content: {},
-        status: 'pending',
-      },
-    });
-
     void this.generateAndSave(quizResult, period, created.id);
-
     return { status: 'pending' };
   }
 
